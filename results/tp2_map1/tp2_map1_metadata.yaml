@@ -1,0 +1,162 @@
+map_name: tp2_map1
+source_sdf: /home/cayo-sousa/ws_ld90_tp2/install/ld90_gz/share/ld90_gz/worlds/tp2_map1.sdf
+bounds:
+  xmin: -10.0
+  xmax: 10.0
+  ymin: -10.0
+  ymax: 10.0
+resolution: 0.1
+inflation_radius: 0.6
+start:
+- -8.5
+- -8.5
+goal:
+- 8.5
+- 8.5
+obstacles:
+  boxes:
+  - type: box
+    name: wall_south
+    collision_name: collision
+    x: 0.0
+    y: -9.9
+    yaw: 0.0
+    size_x: 20.0
+    size_y: 0.2
+    size_z: 1.0
+  - type: box
+    name: wall_north
+    collision_name: collision
+    x: 0.0
+    y: 9.9
+    yaw: 0.0
+    size_x: 20.0
+    size_y: 0.2
+    size_z: 1.0
+  - type: box
+    name: wall_west
+    collision_name: collision
+    x: -9.9
+    y: 0.0
+    yaw: 0.0
+    size_x: 0.2
+    size_y: 20.0
+    size_z: 1.0
+  - type: box
+    name: wall_east
+    collision_name: collision
+    x: 9.9
+    y: 0.0
+    yaw: 0.0
+    size_x: 0.2
+    size_y: 20.0
+    size_z: 1.0
+  - type: box
+    name: wall_left_middle
+    collision_name: collision
+    x: -8.45
+    y: 2.0
+    yaw: 0.0
+    size_x: 3.1
+    size_y: 0.2
+    size_z: 1.0
+  - type: box
+    name: wall_lower_vertical
+    collision_name: collision
+    x: -5.4
+    y: -7.7
+    yaw: 0.0
+    size_x: 0.2
+    size_y: 4.6
+    size_z: 1.0
+  - type: box
+    name: wall_center_vertical
+    collision_name: collision
+    x: -3.0
+    y: -4.0
+    yaw: 0.0
+    size_x: 0.2
+    size_y: 12.0
+    size_z: 1.0
+  - type: box
+    name: wall_center_horizontal
+    collision_name: collision
+    x: -0.75
+    y: 2.0
+    yaw: 0.0
+    size_x: 4.5
+    size_y: 0.2
+    size_z: 1.0
+  - type: box
+    name: wall_top_vertical
+    collision_name: collision
+    x: -0.5
+    y: 8.0
+    yaw: 0.0
+    size_x: 0.2
+    size_y: 4.0
+    size_z: 1.0
+  - type: box
+    name: wall_top_horizontal
+    collision_name: collision
+    x: -2.15
+    y: 6.0
+    yaw: 0.0
+    size_x: 3.3
+    size_y: 0.2
+    size_z: 1.0
+  - type: box
+    name: wall_right_upper
+    collision_name: collision
+    x: 7.5
+    y: 2.0
+    yaw: 0.0
+    size_x: 5.0
+    size_y: 0.2
+    size_z: 1.0
+  - type: box
+    name: wall_right_lower
+    collision_name: collision
+    x: 7.5
+    y: -2.0
+    yaw: 0.0
+    size_x: 5.0
+    size_y: 0.2
+    size_z: 1.0
+  - type: box
+    name: wall_tp2_lower_middle
+    collision_name: collision
+    x: 0.5
+    y: -5.0
+    yaw: 0.0
+    size_x: 4.0
+    size_y: 0.2
+    size_z: 1.0
+  - type: box
+    name: wall_tp2_center_right_vertical
+    collision_name: collision
+    x: 3.2
+    y: 0.0
+    yaw: 0.0
+    size_x: 0.2
+    size_y: 4.0
+    size_z: 1.0
+  - type: box
+    name: wall_tp2_upper_right_vertical
+    collision_name: collision
+    x: 4.8
+    y: 5.6
+    yaw: 0.0
+    size_x: 0.2
+    size_y: 3.2
+    size_z: 1.0
+  - type: box
+    name: wall_tp2_upper_middle
+    collision_name: collision
+    x: 2.0
+    y: 4.0
+    yaw: 0.0
+    size_x: 3.0
+    size_y: 0.2
+    size_z: 1.0
+  cylinders: []
