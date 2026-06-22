@@ -28,9 +28,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'grid_map = ld90_gz.grid_map:main',
             'astar_planner = ld90_gz.astar_planner:main',
             'gvd_planner = ld90_gz.brushfire_gvd:main',
-            'rrt_planner = ld90_gz.rrt_planner:main',
             'path_follower = ld90_gz.path_follower:main',
         ],
     },
