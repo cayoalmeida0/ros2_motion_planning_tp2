@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>ld90_gz</name>
+  <version>0.0.1</version>
+  <description>Simulação do Omron LD90 no Gazebo Harmonic com ROS 2 Jazzy.</description>
+
+  <maintainer email="cayo-sousa@todo.todo">cayo-sousa</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>xacro</depend>
+  <depend>robot_state_publisher</depend>
+  <depend>ros_gz_sim</depend>
+  <depend>ros_gz_bridge</depend>
+
+  <exec_depend>amr_description</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
