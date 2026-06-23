@@ -1,15 +1,6 @@
-
----
-
-## 3. Criar/atualizar o `leiame.txt`
-
-Rode:
-
-```bash
-cat > leiame.txt <<'EOF'
 TRABALHO PRÁTICO 2 - PLANEJAMENTO DE MOVIMENTO DE ROBÔS
 
-Autor: Cayo Sousa
+Autores : Cayo Sousa e Victor Sá
 Ambiente: ROS 2 Jazzy + Gazebo Harmonic
 
 Este repositório contém a implementação das três questões do Trabalho Prático 2:
@@ -112,4 +103,3 @@ Os launches executam automaticamente a sequência necessária:
 6) seguimento do caminho pelo robô.
 
 Portanto, não é necessário gerar manualmente a pasta results/ antes de rodar os testes.
-EOF

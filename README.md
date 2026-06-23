@@ -61,5 +61,3 @@ src/
     └── worlds/
         ├── tp2_map1.sdf
         └── tp2_map2.sdf
-
-EOF
