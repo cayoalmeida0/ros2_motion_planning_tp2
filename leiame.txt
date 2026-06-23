@@ -1,0 +1,115 @@
+
+---
+
+## 3. Criar/atualizar o `leiame.txt`
+
+Rode:
+
+```bash
+cat > leiame.txt <<'EOF'
+TRABALHO PRÁTICO 2 - PLANEJAMENTO DE MOVIMENTO DE ROBÔS
+
+Autor: Cayo Sousa
+Ambiente: ROS 2 Jazzy + Gazebo Harmonic
+
+Este repositório contém a implementação das três questões do Trabalho Prático 2:
+
+1) A* em grid;
+2) Brushfire com Diagrama de Voronoi Generalizado (GVD);
+3) RRT como algoritmo baseado em amostragem.
+
+------------------------------------------------------------
+1. COMPILAÇÃO
+------------------------------------------------------------
+
+Na raiz do workspace, executar:
+
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install
+source install/setup.bash
+
+------------------------------------------------------------
+2. EXECUÇÃO DA QUESTÃO 1 - A*
+------------------------------------------------------------
+
+Mapa 1:
+
+ros2 launch ld90_gz tp2_q1_astar_map1.launch.py
+
+Mapa 2:
+
+ros2 launch ld90_gz tp2_q1_astar_map2.launch.py
+
+------------------------------------------------------------
+3. EXECUÇÃO DA QUESTÃO 2 - BRUSHFIRE / GVD
+------------------------------------------------------------
+
+Mapa 1:
+
+ros2 launch ld90_gz tp2_q2_gvd_map1.launch.py
+
+Mapa 2:
+
+ros2 launch ld90_gz tp2_q2_gvd_map2.launch.py
+
+------------------------------------------------------------
+4. EXECUÇÃO DA QUESTÃO 3 - RRT
+------------------------------------------------------------
+
+Mapa 1:
+
+ros2 launch ld90_gz tp2_q3_rrt_map1.launch.py
+
+Mapa 2:
+
+ros2 launch ld90_gz tp2_q3_rrt_map2.launch.py
+
+------------------------------------------------------------
+5. RESULTADOS GERADOS
+------------------------------------------------------------
+
+A pasta results/ é criada automaticamente durante a execução dos algoritmos.
+
+Ela contém:
+
+- imagens dos mapas discretizados;
+- imagens dos caminhos planejados;
+- arquivos YAML com parâmetros e caminhos;
+- arquivos NumPy com grids e trajetórias em coordenadas do mundo.
+
+A pasta results/ não é versionada no Git, pois pode ser recriada automaticamente ao executar os launches.
+
+------------------------------------------------------------
+6. ESTRUTURA DOS ALGORITMOS
+------------------------------------------------------------
+
+grid_map.py:
+Lê os arquivos SDF, extrai obstáculos do tipo box e cylinder, cria o grid de ocupação e infla os obstáculos.
+
+astar_planner.py:
+Executa o algoritmo A* sobre o grid expandido.
+
+brushfire_gvd.py:
+Executa o Brushfire, extrai o GVD e planeja o caminho usando o diagrama gerado.
+
+rrt_planner.py:
+Executa o RRT, sorteando pontos livres no espaço, expandindo a árvore e verificando colisões com o grid expandido.
+
+path_follower.py:
+Lê o caminho planejado e comanda o robô LD90 no Gazebo.
+
+------------------------------------------------------------
+7. OBSERVAÇÃO
+------------------------------------------------------------
+
+Os launches executam automaticamente a sequência necessária:
+
+1) abertura do Gazebo;
+2) spawn do robô LD90;
+3) ponte ROS/Gazebo;
+4) discretização do mapa;
+5) execução do planejador;
+6) seguimento do caminho pelo robô.
+
+Portanto, não é necessário gerar manualmente a pasta results/ antes de rodar os testes.
+EOF
