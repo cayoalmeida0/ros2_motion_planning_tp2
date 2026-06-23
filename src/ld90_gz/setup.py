@@ -18,6 +18,7 @@ setup(
         (os.path.join('share', package_name, 'urdf'), glob('urdf/*')),
         (os.path.join('share', package_name, 'config'), glob('config/*')),
         (os.path.join('share', package_name, 'models'), glob('models/*')),
+        (os.path.join('share', package_name, 'gui'), glob('gui/*.config')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -32,6 +33,7 @@ setup(
             'astar_planner = ld90_gz.astar_planner:main',
             'gvd_planner = ld90_gz.brushfire_gvd:main',
             'path_follower = ld90_gz.path_follower:main',
+            'rrt_planner = ld90_gz.rrt_planner:main',
         ],
     },
 )

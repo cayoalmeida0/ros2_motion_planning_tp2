@@ -1,0 +1,36 @@
+map_name: tp2_map1
+algorithm: RRT
+resolution: 0.1
+start_world:
+- -8.5
+- -8.5
+goal_world:
+- 8.5
+- 8.5
+path_length_points: 4
+tree_nodes_count: 151
+parameters:
+  max_iterations: 12000
+  step_size: 0.6
+  goal_tolerance: 0.6
+  goal_bias: 0.1
+  collision_check_step: 0.05
+  smooth_iterations: 150
+path_cells:
+- row: 15
+  col: 15
+- row: 115
+  col: 48
+- row: 182
+  col: 148
+- row: 185
+  col: 185
+path_world:
+- x: -8.5
+  y: -8.5
+- x: -5.181338125937721
+  y: 1.5138329015148766
+- x: 4.82597414216043
+  y: 8.24146185509941
+- x: 8.5
+  y: 8.5

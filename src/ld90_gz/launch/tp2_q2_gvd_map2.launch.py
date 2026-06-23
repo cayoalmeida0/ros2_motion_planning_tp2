@@ -28,6 +28,7 @@ def generate_launch_description():
     world = os.path.join(pkg_ld90_gz, "worlds", "tp2_map2.sdf")
     model_file = os.path.join(pkg_ld90_gz, "models", "ld90_gz.sdf")
     bridge_file = os.path.join(pkg_ld90_gz, "config", "bridge.yaml")
+    gui_config = os.path.join(pkg_ld90_gz, "gui", "tp2_top_view.config")
 
     use_sim_time = LaunchConfiguration("use_sim_time")
     results_dir = LaunchConfiguration("results_dir")
@@ -58,7 +59,7 @@ def generate_launch_description():
             os.path.join(pkg_ros_gz_sim, "launch", "gz_sim.launch.py")
         ),
         launch_arguments={
-            "gz_args": f"-r {world}",
+            "gz_args": f"-r {world} --gui-config {gui_config}",
         }.items(),
     )
 
