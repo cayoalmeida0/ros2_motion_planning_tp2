@@ -1,4 +1,4 @@
-<<'EOF'
+
 # ROS 2 Motion Planning TP2
 
 Repositório desenvolvido para o Trabalho Prático 2 da disciplina de Planejamento de Movimento de Robôs.
