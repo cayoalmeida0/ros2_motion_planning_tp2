@@ -1,29 +1,12 @@
 #!/usr/bin/env python3
 
 """
-rrt_planner.py
+Planejador RRT para o TP2.
 
-Questão 3 do Trabalho Prático 2:
-- Implementação do algoritmo RRT;
-- Planejamento baseado em amostragem;
-- Verificação de colisão usando o grid expandido;
-- Geração de imagem com árvore RRT e caminho planejado;
-- Salvamento do caminho para navegação no Gazebo.
+O RRT sorteia pontos livres no mapa, expande uma árvore a partir do start
+e tenta conectar essa árvore ao goal.
 
-Entrada:
-- results/<map_name>/<map_name>_grid_inflated.npy
-- results/<map_name>/<map_name>_metadata.yaml
-
-Saídas:
-- <map_name>_rrt_path_world.npy
-- <map_name>_rrt_path_cells.npy
-- <map_name>_rrt_path.yaml
-- <map_name>_rrt_path.png
-
-Convenção do grid:
-0 = célula livre
-1 = obstáculo original
-2 = obstáculo expandido
+A verificação de colisão é feita usando o grid expandido gerado pelo grid_map.py.
 """
 
 import argparse
@@ -61,59 +44,15 @@ GridCell = Tuple[int, int]
 
 
 @dataclass
-class RRTNode:
+class Node:
     x: float
     y: float
     parent: Optional[int]
 
 
-# =============================================================================
-# Funções geométricas
-# =============================================================================
+def distance(a: Point2D, b: Point2D) -> float:
+    return math.hypot(a[0] - b[0], a[1] - b[1])
 
-def euclidean_distance(p1: Point2D, p2: Point2D) -> float:
-    dx = p1[0] - p2[0]
-    dy = p1[1] - p2[1]
-    return math.sqrt(dx * dx + dy * dy)
-
-
-def steer(from_point: Point2D, to_point: Point2D, step_size: float) -> Point2D:
-    """
-    Avança de from_point na direção de to_point com passo máximo step_size.
-    """
-    distance = euclidean_distance(from_point, to_point)
-
-    if distance <= step_size:
-        return to_point
-
-    theta = math.atan2(to_point[1] - from_point[1], to_point[0] - from_point[0])
-
-    new_x = from_point[0] + step_size * math.cos(theta)
-    new_y = from_point[1] + step_size * math.sin(theta)
-
-    return new_x, new_y
-
-
-def nearest_node_index(nodes: List[RRTNode], point: Point2D) -> int:
-    """
-    Retorna o índice do nó da árvore mais próximo do ponto amostrado.
-    """
-    best_index = 0
-    best_distance = float("inf")
-
-    for i, node in enumerate(nodes):
-        distance = euclidean_distance((node.x, node.y), point)
-
-        if distance < best_distance:
-            best_distance = distance
-            best_index = i
-
-    return best_index
-
-
-# =============================================================================
-# Verificação de colisão
-# =============================================================================
 
 def point_is_free(
     point: Point2D,
@@ -121,11 +60,7 @@ def point_is_free(
     bounds: MapBounds,
     resolution: float,
 ) -> bool:
-    """
-    Verifica se um ponto contínuo do mundo está em uma célula livre.
-    """
     row, col = world_to_grid(point[0], point[1], bounds, resolution)
-
     return is_cell_free(grid, row, col)
 
 
@@ -135,24 +70,23 @@ def segment_is_free(
     grid: np.ndarray,
     bounds: MapBounds,
     resolution: float,
-    collision_check_step: float,
+    step: float,
 ) -> bool:
     """
-    Verifica se o segmento p1 -> p2 está livre.
+    Testa se o segmento p1 -> p2 está livre.
 
-    O segmento é discretizado em pequenos passos contínuos, e cada ponto
-    intermediário é convertido para célula do grid expandido.
+    O segmento é dividido em vários pontos intermediários.
+    Cada ponto é convertido para célula do grid e testado contra obstáculos.
     """
-    distance = euclidean_distance(p1, p2)
+    d = distance(p1, p2)
 
-    if distance == 0.0:
+    if d == 0.0:
         return point_is_free(p1, grid, bounds, resolution)
 
-    n_steps = max(2, int(math.ceil(distance / collision_check_step)))
+    n = max(2, int(math.ceil(d / step)))
 
-    for i in range(n_steps + 1):
-        t = i / n_steps
-
+    for i in range(n + 1):
+        t = i / n
         x = p1[0] + t * (p2[0] - p1[0])
         y = p1[1] + t * (p2[1] - p1[1])
 
@@ -162,51 +96,42 @@ def segment_is_free(
     return True
 
 
-def find_nearest_free_point(
+def nearest_free_point(
     grid: np.ndarray,
     point: Point2D,
     bounds: MapBounds,
     resolution: float,
-    max_radius_cells: int = 60,
+    max_radius: int = 60,
 ) -> Optional[Point2D]:
     """
-    Caso start ou goal estejam em região ocupada/expandida, procura
-    a célula livre mais próxima e retorna seu centro em coordenadas do mundo.
+    Ajusta start ou goal para uma célula livre próxima, caso necessário.
     """
     row, col = world_to_grid(point[0], point[1], bounds, resolution)
 
     if is_cell_free(grid, row, col):
         return point
 
-    best_cell = None
-    best_distance = float("inf")
+    for radius in range(1, max_radius + 1):
+        candidates = []
 
-    for radius in range(1, max_radius_cells + 1):
         for dr in range(-radius, radius + 1):
             for dc in range(-radius, radius + 1):
                 rr = row + dr
                 cc = col + dc
 
-                if not is_cell_free(grid, rr, cc):
-                    continue
+                if is_cell_free(grid, rr, cc):
+                    dist = math.hypot(dr, dc)
+                    candidates.append((dist, (rr, cc)))
 
-                distance = math.sqrt(dr * dr + dc * dc)
-
-                if distance < best_distance:
-                    best_distance = distance
-                    best_cell = (rr, cc)
-
-        if best_cell is not None:
-            return grid_to_world(best_cell[0], best_cell[1], bounds, resolution)
+        if candidates:
+            candidates.sort(key=lambda item: item[0])
+            best_row, best_col = candidates[0][1]
+            return grid_to_world(best_row, best_col, bounds, resolution)
 
     return None
 
 
-# =============================================================================
-# RRT
-# =============================================================================
-
-def sample_free_point(
+def sample_point(
     grid: np.ndarray,
     bounds: MapBounds,
     resolution: float,
@@ -214,10 +139,10 @@ def sample_free_point(
     goal_bias: float,
 ) -> Point2D:
     """
-    Sorteia um ponto livre no espaço de trabalho.
+    Sorteia um ponto livre.
 
-    Com probabilidade goal_bias, retorna o próprio goal.
-    Isso acelera a convergência do RRT para o objetivo.
+    Em algumas iterações, o próprio goal é usado como amostra.
+    Isso ajuda a árvore a crescer em direção ao objetivo.
     """
     if random.random() < goal_bias:
         return goal
@@ -230,24 +155,57 @@ def sample_free_point(
             return x, y
 
 
-def reconstruct_rrt_path(nodes: List[RRTNode], goal_index: int) -> List[Point2D]:
+def nearest_node(nodes: List[Node], point: Point2D) -> int:
     """
-    Reconstrói o caminho do goal até o start usando os pais dos nós.
+    Encontra o nó da árvore mais próximo do ponto sorteado.
+    """
+    best_index = 0
+    best_distance = float("inf")
+
+    for i, node in enumerate(nodes):
+        d = distance((node.x, node.y), point)
+
+        if d < best_distance:
+            best_distance = d
+            best_index = i
+
+    return best_index
+
+
+def steer(from_point: Point2D, to_point: Point2D, step_size: float) -> Point2D:
+    """
+    Avança de um ponto em direção ao outro, respeitando o passo máximo.
+    """
+    d = distance(from_point, to_point)
+
+    if d <= step_size:
+        return to_point
+
+    theta = math.atan2(to_point[1] - from_point[1], to_point[0] - from_point[0])
+
+    x = from_point[0] + step_size * math.cos(theta)
+    y = from_point[1] + step_size * math.sin(theta)
+
+    return x, y
+
+
+def reconstruct_path(nodes: List[Node], goal_index: int) -> List[Point2D]:
+    """
+    Reconstrói o caminho seguindo os pais dos nós.
     """
     path = []
+    current = goal_index
 
-    current_index = goal_index
-
-    while current_index is not None:
-        node = nodes[current_index]
+    while current is not None:
+        node = nodes[current]
         path.append((node.x, node.y))
-        current_index = node.parent
+        current = node.parent
 
     path.reverse()
     return path
 
 
-def rrt_search(
+def rrt(
     grid: np.ndarray,
     bounds: MapBounds,
     resolution: float,
@@ -257,29 +215,19 @@ def rrt_search(
     step_size: float,
     goal_tolerance: float,
     goal_bias: float,
-    collision_check_step: float,
-) -> Tuple[Optional[List[Point2D]], List[RRTNode]]:
+    collision_step: float,
+) -> Tuple[Optional[List[Point2D]], List[Node]]:
     """
-    Executa o RRT.
-
-    Retorna:
-    - caminho em coordenadas do mundo, se encontrado;
-    - lista completa de nós da árvore.
+    Implementação principal do RRT.
     """
-    nodes: List[RRTNode] = [RRTNode(start[0], start[1], parent=None)]
+    nodes = [Node(start[0], start[1], parent=None)]
 
     for iteration in range(max_iterations):
-        random_point = sample_free_point(
-            grid=grid,
-            bounds=bounds,
-            resolution=resolution,
-            goal=goal,
-            goal_bias=goal_bias,
-        )
+        random_point = sample_point(grid, bounds, resolution, goal, goal_bias)
 
-        nearest_index = nearest_node_index(nodes, random_point)
-        nearest_node = nodes[nearest_index]
-        nearest_point = (nearest_node.x, nearest_node.y)
+        nearest_index = nearest_node(nodes, random_point)
+        nearest = nodes[nearest_index]
+        nearest_point = (nearest.x, nearest.y)
 
         new_point = steer(nearest_point, random_point, step_size)
 
@@ -287,105 +235,79 @@ def rrt_search(
             continue
 
         if not segment_is_free(
-            p1=nearest_point,
-            p2=new_point,
-            grid=grid,
-            bounds=bounds,
-            resolution=resolution,
-            collision_check_step=collision_check_step,
+            nearest_point,
+            new_point,
+            grid,
+            bounds,
+            resolution,
+            collision_step,
         ):
             continue
 
-        nodes.append(
-            RRTNode(
-                x=new_point[0],
-                y=new_point[1],
-                parent=nearest_index,
-            )
-        )
-
+        nodes.append(Node(new_point[0], new_point[1], parent=nearest_index))
         new_index = len(nodes) - 1
 
-        # Tenta conectar o novo nó ao objetivo
-        distance_to_goal = euclidean_distance(new_point, goal)
-
-        if distance_to_goal <= goal_tolerance:
+        if distance(new_point, goal) <= goal_tolerance:
             if segment_is_free(
-                p1=new_point,
-                p2=goal,
-                grid=grid,
-                bounds=bounds,
-                resolution=resolution,
-                collision_check_step=collision_check_step,
+                new_point,
+                goal,
+                grid,
+                bounds,
+                resolution,
+                collision_step,
             ):
-                nodes.append(
-                    RRTNode(
-                        x=goal[0],
-                        y=goal[1],
-                        parent=new_index,
-                    )
-                )
-
+                nodes.append(Node(goal[0], goal[1], parent=new_index))
                 goal_index = len(nodes) - 1
-                path = reconstruct_rrt_path(nodes, goal_index)
 
-                print(f"RRT encontrou solução na iteração {iteration + 1}.")
-                return path, nodes
+                print(f"RRT encontrou caminho na iteração {iteration + 1}.")
+                return reconstruct_path(nodes, goal_index), nodes
 
     return None, nodes
 
 
-# =============================================================================
-# Suavização opcional
-# =============================================================================
-
-def shortcut_smooth_path(
+def smooth_path(
     path: List[Point2D],
     grid: np.ndarray,
     bounds: MapBounds,
     resolution: float,
-    collision_check_step: float,
-    smooth_iterations: int,
+    collision_step: float,
+    iterations: int,
 ) -> List[Point2D]:
     """
-    Suaviza o caminho com atalhos aleatórios.
+    Suavização simples por atalhos.
 
-    Essa etapa não faz parte essencial do RRT, mas melhora o seguimento
-    pelo robô, removendo zigue-zagues desnecessários.
+    Dois pontos do caminho são sorteados. Se a reta entre eles estiver livre,
+    os pontos intermediários são removidos.
     """
-    if len(path) <= 2 or smooth_iterations <= 0:
+    if len(path) <= 2:
         return path
 
-    smoothed = path.copy()
+    new_path = path.copy()
 
-    for _ in range(smooth_iterations):
-        if len(smoothed) <= 2:
+    for _ in range(iterations):
+        if len(new_path) <= 2:
             break
 
-        i = random.randint(0, len(smoothed) - 2)
-        j = random.randint(i + 1, len(smoothed) - 1)
+        i = random.randint(0, len(new_path) - 2)
+        j = random.randint(i + 1, len(new_path) - 1)
 
         if j <= i + 1:
             continue
 
         if segment_is_free(
-            p1=smoothed[i],
-            p2=smoothed[j],
-            grid=grid,
-            bounds=bounds,
-            resolution=resolution,
-            collision_check_step=collision_check_step,
+            new_path[i],
+            new_path[j],
+            grid,
+            bounds,
+            resolution,
+            collision_step,
         ):
-            smoothed = smoothed[: i + 1] + smoothed[j:]
+            new_path = new_path[: i + 1] + new_path[j:]
 
-    return smoothed
+    return new_path
 
 
-# =============================================================================
-# Conversão e salvamento
-# =============================================================================
-
-def world_path_to_cells(
+def path_to_cells(
     path_world: List[Point2D],
     bounds: MapBounds,
     resolution: float,
@@ -396,38 +318,33 @@ def world_path_to_cells(
     ]
 
 
-def save_path_yaml(
+def save_yaml(
     output_path: str,
     map_name: str,
-    algorithm: str,
     path_world: List[Point2D],
     path_cells: List[GridCell],
     start: Point2D,
     goal: Point2D,
     resolution: float,
-    max_iterations: int,
-    step_size: float,
-    goal_tolerance: float,
-    goal_bias: float,
-    collision_check_step: float,
-    smooth_iterations: int,
-    tree_nodes_count: int,
+    nodes_count: int,
+    args,
 ):
     data = {
         "map_name": map_name,
-        "algorithm": algorithm,
+        "algorithm": "RRT",
         "resolution": float(resolution),
         "start_world": [float(start[0]), float(start[1])],
         "goal_world": [float(goal[0]), float(goal[1])],
-        "path_length_points": int(len(path_world)),
-        "tree_nodes_count": int(tree_nodes_count),
+        "path_length_points": len(path_world),
+        "tree_nodes_count": nodes_count,
         "parameters": {
-            "max_iterations": int(max_iterations),
-            "step_size": float(step_size),
-            "goal_tolerance": float(goal_tolerance),
-            "goal_bias": float(goal_bias),
-            "collision_check_step": float(collision_check_step),
-            "smooth_iterations": int(smooth_iterations),
+            "max_iterations": int(args.max_iterations),
+            "step_size": float(args.step_size),
+            "goal_tolerance": float(args.goal_tolerance),
+            "goal_bias": float(args.goal_bias),
+            "collision_check_step": float(args.collision_check_step),
+            "smooth_iterations": int(args.smooth_iterations),
+            "seed": int(args.seed),
         },
         "path_cells": [
             {"row": int(row), "col": int(col)}
@@ -443,32 +360,19 @@ def save_path_yaml(
         yaml.safe_dump(data, file, sort_keys=False, allow_unicode=True)
 
 
-# =============================================================================
-# Renderização
-# =============================================================================
-
-def render_rrt_result(
+def render_result(
     grid: np.ndarray,
     bounds: MapBounds,
     resolution: float,
-    nodes: List[RRTNode],
-    path_world: List[Point2D],
+    nodes: List[Node],
+    path: List[Point2D],
     start: Point2D,
     goal: Point2D,
     output_path: str,
+    draw_tree: bool,
     title: str,
-    draw_tree: bool = True,
 ):
-    """
-    Renderiza o grid expandido, a árvore RRT e o caminho planejado.
-    """
-    cmap = ListedColormap(
-        [
-            "white",      # livre
-            "black",      # obstáculo original
-            "lightgray",  # obstáculo expandido
-        ]
-    )
+    cmap = ListedColormap(["white", "black", "lightgray"])
 
     fig, ax = plt.subplots(figsize=(10, 10))
 
@@ -506,46 +410,17 @@ def render_rrt_result(
                 alpha=0.45,
             )
 
-    if len(path_world) > 0:
-        path_x = [p[0] for p in path_world]
-        path_y = [p[1] for p in path_world]
+    path_x = [p[0] for p in path]
+    path_y = [p[1] for p in path]
 
-        ax.plot(
-            path_x,
-            path_y,
-            color="orange",
-            linewidth=2.5,
-            label="Caminho RRT",
-        )
+    ax.plot(path_x, path_y, color="orange", linewidth=2.5, label="Caminho RRT")
+    ax.scatter(path_x, path_y, color="orange", s=12)
 
-        ax.scatter(
-            path_x,
-            path_y,
-            color="orange",
-            s=12,
-        )
-
-    ax.plot(
-        start[0],
-        start[1],
-        marker="o",
-        markersize=8,
-        color="green",
-        label="Start",
-    )
-
-    ax.plot(
-        goal[0],
-        goal[1],
-        marker="x",
-        markersize=9,
-        color="red",
-        label="Goal",
-    )
+    ax.plot(start[0], start[1], "go", markersize=8, label="Start")
+    ax.plot(goal[0], goal[1], "rx", markersize=9, label="Goal")
 
     ax.set_xticks(np.arange(math.ceil(bounds.xmin), math.floor(bounds.xmax) + 1, 1.0))
     ax.set_yticks(np.arange(math.ceil(bounds.ymin), math.floor(bounds.ymax) + 1, 1.0))
-
     ax.set_aspect("equal", adjustable="box")
     ax.set_title(title)
     ax.set_xlabel("x [m]")
@@ -557,120 +432,45 @@ def render_rrt_result(
     plt.close(fig)
 
 
-# =============================================================================
-# Função principal
-# =============================================================================
+def get_start_goal(args, metadata):
+    if args.start_x is not None and args.start_y is not None:
+        start = (args.start_x, args.start_y)
+    else:
+        start = tuple(metadata["start"])
+
+    if args.goal_x is not None and args.goal_y is not None:
+        goal = (args.goal_x, args.goal_y)
+    else:
+        goal = tuple(metadata["goal"])
+
+    return start, goal
+
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Planejador RRT para a Questão 3 do TP2."
-    )
+    parser = argparse.ArgumentParser(description="RRT para o TP2.")
 
-    parser.add_argument(
-        "--map-name",
-        required=True,
-        help="Nome do mapa. Exemplo: tp2_map1 ou tp2_map2.",
-    )
+    parser.add_argument("--map-name", required=True)
+    parser.add_argument("--results-dir", default="results")
 
-    parser.add_argument(
-        "--results-dir",
-        default="results",
-        help="Diretório dos resultados gerados pelo grid_map.py.",
-    )
+    parser.add_argument("--start-x", type=float, default=None)
+    parser.add_argument("--start-y", type=float, default=None)
+    parser.add_argument("--goal-x", type=float, default=None)
+    parser.add_argument("--goal-y", type=float, default=None)
 
-    parser.add_argument(
-        "--start-x",
-        type=float,
-        default=None,
-        help="Coordenada x inicial. Se omitida, usa metadata.",
-    )
+    parser.add_argument("--snap-to-free", action="store_true")
 
-    parser.add_argument(
-        "--start-y",
-        type=float,
-        default=None,
-        help="Coordenada y inicial. Se omitida, usa metadata.",
-    )
-
-    parser.add_argument(
-        "--goal-x",
-        type=float,
-        default=None,
-        help="Coordenada x objetivo. Se omitida, usa metadata.",
-    )
-
-    parser.add_argument(
-        "--goal-y",
-        type=float,
-        default=None,
-        help="Coordenada y objetivo. Se omitida, usa metadata.",
-    )
-
-    parser.add_argument(
-        "--snap-to-free",
-        action="store_true",
-        help="Move start/goal para célula livre mais próxima, se necessário.",
-    )
-
-    parser.add_argument(
-        "--max-iterations",
-        type=int,
-        default=12000,
-        help="Número máximo de iterações do RRT.",
-    )
-
-    parser.add_argument(
-        "--step-size",
-        type=float,
-        default=0.60,
-        help="Passo máximo de expansão da árvore em metros.",
-    )
-
-    parser.add_argument(
-        "--goal-tolerance",
-        type=float,
-        default=0.60,
-        help="Distância para tentar conectar ao objetivo.",
-    )
-
-    parser.add_argument(
-        "--goal-bias",
-        type=float,
-        default=0.10,
-        help="Probabilidade de amostrar diretamente o goal.",
-    )
-
-    parser.add_argument(
-        "--collision-check-step",
-        type=float,
-        default=0.05,
-        help="Passo de verificação de colisão ao longo dos segmentos.",
-    )
-
-    parser.add_argument(
-        "--smooth-iterations",
-        type=int,
-        default=150,
-        help="Número de tentativas de suavização por atalhos.",
-    )
-
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Semente aleatória para reprodutibilidade.",
-    )
-
-    parser.add_argument(
-        "--no-tree",
-        action="store_true",
-        help="Não desenha a árvore RRT na imagem final.",
-    )
+    parser.add_argument("--max-iterations", type=int, default=12000)
+    parser.add_argument("--step-size", type=float, default=0.60)
+    parser.add_argument("--goal-tolerance", type=float, default=0.60)
+    parser.add_argument("--goal-bias", type=float, default=0.10)
+    parser.add_argument("--collision-check-step", type=float, default=0.05)
+    parser.add_argument("--smooth-iterations", type=int, default=150)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--no-tree", action="store_true")
 
     args = parser.parse_args()
 
     random.seed(args.seed)
-    np.random.seed(args.seed)
 
     grid, metadata, bounds = load_grid_package(
         map_name=args.map_name,
@@ -678,64 +478,40 @@ def main():
     )
 
     resolution = float(metadata["resolution"])
-
-    metadata_start = metadata.get("start", None)
-    metadata_goal = metadata.get("goal", None)
-
-    if args.start_x is not None and args.start_y is not None:
-        start = (args.start_x, args.start_y)
-    elif metadata_start is not None:
-        start = (float(metadata_start[0]), float(metadata_start[1]))
-    else:
-        raise ValueError("Start não informado e inexistente no metadata.")
-
-    if args.goal_x is not None and args.goal_y is not None:
-        goal = (args.goal_x, args.goal_y)
-    elif metadata_goal is not None:
-        goal = (float(metadata_goal[0]), float(metadata_goal[1]))
-    else:
-        raise ValueError("Goal não informado e inexistente no metadata.")
+    start, goal = get_start_goal(args, metadata)
 
     print("")
     print("Executando RRT")
     print(f"Mapa: {args.map_name}")
-    print(f"Resolução: {resolution:.3f} m/célula")
     print(f"Start: {start}")
     print(f"Goal: {goal}")
-    print(f"Iterações máximas: {args.max_iterations}")
-    print(f"Step size: {args.step_size:.3f} m")
-    print(f"Goal bias: {args.goal_bias:.3f}")
-    print(f"Semente aleatória: {args.seed}")
+    print(f"Step size: {args.step_size}")
+    print(f"Goal bias: {args.goal_bias}")
+    print(f"Semente: {args.seed}")
 
     if not point_is_free(start, grid, bounds, resolution):
-        print("[AVISO] Start está em célula ocupada ou expandida.")
+        if not args.snap_to_free:
+            raise RuntimeError("Start em região ocupada. Use --snap-to-free.")
 
-        if args.snap_to_free:
-            new_start = find_nearest_free_point(grid, start, bounds, resolution)
+        start = nearest_free_point(grid, start, bounds, resolution)
 
-            if new_start is None:
-                raise RuntimeError("Não foi possível ajustar o start.")
+        if start is None:
+            raise RuntimeError("Não foi possível ajustar o start.")
 
-            print(f"        Start ajustado para {new_start}")
-            start = new_start
-        else:
-            raise RuntimeError("Start inválido. Use --snap-to-free.")
+        print(f"Start ajustado para {start}")
 
     if not point_is_free(goal, grid, bounds, resolution):
-        print("[AVISO] Goal está em célula ocupada ou expandida.")
+        if not args.snap_to_free:
+            raise RuntimeError("Goal em região ocupada. Use --snap-to-free.")
 
-        if args.snap_to_free:
-            new_goal = find_nearest_free_point(grid, goal, bounds, resolution)
+        goal = nearest_free_point(grid, goal, bounds, resolution)
 
-            if new_goal is None:
-                raise RuntimeError("Não foi possível ajustar o goal.")
+        if goal is None:
+            raise RuntimeError("Não foi possível ajustar o goal.")
 
-            print(f"        Goal ajustado para {new_goal}")
-            goal = new_goal
-        else:
-            raise RuntimeError("Goal inválido. Use --snap-to-free.")
+        print(f"Goal ajustado para {goal}")
 
-    path_world, nodes = rrt_search(
+    path, nodes = rrt(
         grid=grid,
         bounds=bounds,
         resolution=resolution,
@@ -745,93 +521,69 @@ def main():
         step_size=args.step_size,
         goal_tolerance=args.goal_tolerance,
         goal_bias=args.goal_bias,
-        collision_check_step=args.collision_check_step,
+        collision_step=args.collision_check_step,
     )
 
-    if path_world is None:
-        raise RuntimeError(
-            "RRT não encontrou caminho. Tente aumentar --max-iterations, "
-            "--goal-bias ou ajustar --step-size."
-        )
+    if path is None:
+        raise RuntimeError("RRT não encontrou caminho.")
 
-    print(f"Caminho original encontrado com {len(path_world)} pontos.")
-    print(f"Nós gerados na árvore: {len(nodes)}")
+    print(f"Caminho original: {len(path)} pontos")
+    print(f"Nós gerados: {len(nodes)}")
 
-    smoothed_path = shortcut_smooth_path(
-        path=path_world,
+    path = smooth_path(
+        path=path,
         grid=grid,
         bounds=bounds,
         resolution=resolution,
-        collision_check_step=args.collision_check_step,
-        smooth_iterations=args.smooth_iterations,
+        collision_step=args.collision_check_step,
+        iterations=args.smooth_iterations,
     )
 
-    print(f"Caminho após suavização: {len(smoothed_path)} pontos.")
+    print(f"Caminho suavizado: {len(path)} pontos")
 
-    path_cells = world_path_to_cells(smoothed_path, bounds, resolution)
+    path_cells = path_to_cells(path, bounds, resolution)
 
-    map_output_dir = os.path.join(args.results_dir, args.map_name)
-    os.makedirs(map_output_dir, exist_ok=True)
+    output_dir = os.path.join(args.results_dir, args.map_name)
+    os.makedirs(output_dir, exist_ok=True)
 
-    path_world_path = os.path.join(
-        map_output_dir,
-        f"{args.map_name}_rrt_path_world.npy",
-    )
+    world_path = os.path.join(output_dir, f"{args.map_name}_rrt_path_world.npy")
+    cells_path = os.path.join(output_dir, f"{args.map_name}_rrt_path_cells.npy")
+    yaml_path = os.path.join(output_dir, f"{args.map_name}_rrt_path.yaml")
+    image_path = os.path.join(output_dir, f"{args.map_name}_rrt_path.png")
 
-    path_cells_path = os.path.join(
-        map_output_dir,
-        f"{args.map_name}_rrt_path_cells.npy",
-    )
+    np.save(world_path, np.array(path, dtype=np.float64))
+    np.save(cells_path, np.array(path_cells, dtype=np.int32))
 
-    path_yaml_path = os.path.join(
-        map_output_dir,
-        f"{args.map_name}_rrt_path.yaml",
-    )
-
-    image_path = os.path.join(
-        map_output_dir,
-        f"{args.map_name}_rrt_path.png",
-    )
-
-    np.save(path_world_path, np.array(smoothed_path, dtype=np.float64))
-    np.save(path_cells_path, np.array(path_cells, dtype=np.int32))
-
-    save_path_yaml(
-        output_path=path_yaml_path,
+    save_yaml(
+        output_path=yaml_path,
         map_name=args.map_name,
-        algorithm="RRT",
-        path_world=smoothed_path,
+        path_world=path,
         path_cells=path_cells,
         start=start,
         goal=goal,
         resolution=resolution,
-        max_iterations=args.max_iterations,
-        step_size=args.step_size,
-        goal_tolerance=args.goal_tolerance,
-        goal_bias=args.goal_bias,
-        collision_check_step=args.collision_check_step,
-        smooth_iterations=args.smooth_iterations,
-        tree_nodes_count=len(nodes),
+        nodes_count=len(nodes),
+        args=args,
     )
 
-    render_rrt_result(
+    render_result(
         grid=grid,
         bounds=bounds,
         resolution=resolution,
         nodes=nodes,
-        path_world=smoothed_path,
+        path=path,
         start=start,
         goal=goal,
         output_path=image_path,
-        title=f"{args.map_name}: caminho planejado por RRT",
         draw_tree=not args.no_tree,
+        title=f"{args.map_name}: caminho planejado por RRT",
     )
 
     print("")
     print("Arquivos gerados:")
-    print(f"- {path_world_path}")
-    print(f"- {path_cells_path}")
-    print(f"- {path_yaml_path}")
+    print(f"- {world_path}")
+    print(f"- {cells_path}")
+    print(f"- {yaml_path}")
     print(f"- {image_path}")
     print("")
 
