@@ -1,7 +1,14 @@
 build/
 install/
 log/
+
 __pycache__/
 *.pyc
 *.npy
-results/
+
+results/*
+!results/.gitkeep
+!results/tp2_map1/
+!results/tp2_map1/.gitkeep
+!results/tp2_map2/
+!results/tp2_map2/.gitkeep
